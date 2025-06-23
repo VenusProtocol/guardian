@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "jest.config.js",
+    ".eslintrc.js",
+    "test",
+    "scenario",
+    "deploy",
+    "docgen-templates",
+    "commitlint.config.js",
+    "hardhat.config.zksync.ts"
+  ]
+}
