@@ -55,7 +55,7 @@ const config: HardhatUserConfig = {
               yul: !process.env.CI,
             },
           },
-          evmVersion: "paris",
+          evmVersion: "cancun",
           outputSelection: {
             "*": {
               "*": ["storageLayout"],
@@ -77,6 +77,8 @@ const config: HardhatUserConfig = {
       accounts: DEPLOYER_PRIVATE_KEY ? [`0x${DEPLOYER_PRIVATE_KEY}`] : [],
       zksync: true,
       live: true,
+      gasPrice: 2000000000, // 20 gwei
+      enableVerifyURL: true,
     },
     zksyncmainnet: {
       url: process.env.ARCHIVE_NODE_zksyncmainnet || "https://mainnet.era.zksync.io",
@@ -85,6 +87,7 @@ const config: HardhatUserConfig = {
       accounts: DEPLOYER_PRIVATE_KEY ? [`0x${DEPLOYER_PRIVATE_KEY}`] : [],
       zksync: true,
       live: true,
+      enableVerifyURL: true,
     },
   },
   gasReporter: {
