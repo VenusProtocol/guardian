@@ -7,7 +7,6 @@ import "@nomiclabs/hardhat-etherscan";
 import "@openzeppelin/hardhat-upgrades";
 import "@typechain/hardhat";
 import * as dotenv from "dotenv";
-import { parseUnits } from "ethers/lib/utils";
 import "hardhat-dependency-compiler";
 import "hardhat-deploy";
 import "hardhat-gas-reporter";
@@ -110,7 +109,7 @@ const config: HardhatUserConfig = {
               yul: !process.env.CI,
             },
           },
-          evmVersion: "paris",
+          evmVersion: "cancun",
           outputSelection: {
             "*": {
               "*": ["storageLayout"],
@@ -130,53 +129,50 @@ const config: HardhatUserConfig = {
     bsctestnet: {
       url: process.env.ARCHIVE_NODE_bsctestnet || "https://data-seed-prebsc-1-s1.binance.org:8545",
       chainId: 97,
-      accounts: {
-        mnemonic: process.env.MNEMONIC || "",
-      },
-      gasPrice: parseUnits("10", "gwei").toNumber(),
-      gasMultiplier: 10,
-      timeout: 12000000,
+      live: true,
+      tags: ["testnet"],
+      gasPrice: 20000000000,
+      accounts: DEPLOYER_PRIVATE_KEY ? [`0x${DEPLOYER_PRIVATE_KEY}`] : [],
     },
+    // Mainnet deployments are done through Frame wallet RPC
     bscmainnet: {
       url: process.env.ARCHIVE_NODE_bscmainnet || "https://bsc-dataseed.binance.org/",
       chainId: 56,
       live: true,
       timeout: 1200000, // 20 minutes
-      accounts: process.env.DEPLOYER_PRIVATE_KEY ? [`0x${process.env.DEPLOYER_PRIVATE_KEY}`] : [],
+      accounts: DEPLOYER_PRIVATE_KEY ? [`0x${DEPLOYER_PRIVATE_KEY}`] : [],
     },
     sepolia: {
-      url: process.env.ARCHIVE_NODE_sepolia || "https://ethereum-sepolia.blockpi.network/v1/rpc/public",
+      url: process.env.ARCHIVE_NODE_sepolia || "https://eth-sepolia.public.blastapi.io",
       chainId: 11155111,
       live: true,
-      accounts: {
-        mnemonic: process.env.MNEMONIC || "",
-      },
+      tags: ["testnet"],
+      accounts: DEPLOYER_PRIVATE_KEY ? [`0x${DEPLOYER_PRIVATE_KEY}`] : [],
     },
     ethereum: {
-      url: process.env.ARCHIVE_NODE_ethereum || "https://ethereum.blockpi.network/v1/rpc/public",
+      url: process.env.ARCHIVE_NODE_ethereum || "https://ethereum.public.blockpi.network/v1/rpc/public",
       chainId: 1,
-      accounts: process.env.DEPLOYER_PRIVATE_KEY ? [`0x${process.env.DEPLOYER_PRIVATE_KEY}`] : [],
+      live: true,
+      accounts: DEPLOYER_PRIVATE_KEY ? [`0x${DEPLOYER_PRIVATE_KEY}`] : [],
     },
     opbnbtestnet: {
       url: process.env.ARCHIVE_NODE_opbnbtestnet || "https://opbnb-testnet-rpc.bnbchain.org",
       chainId: 5611,
       live: true,
-      gasPrice: 300000000000,
+      tags: ["testnet"],
       accounts: DEPLOYER_PRIVATE_KEY ? [`0x${DEPLOYER_PRIVATE_KEY}`] : [],
     },
     opbnbmainnet: {
       url: process.env.ARCHIVE_NODE_opbnbmainnet || "https://opbnb-mainnet-rpc.bnbchain.org",
       chainId: 204,
       live: true,
-      gasPrice: parseUnits("0.03", "gwei").toNumber(),
-      accounts: {
-        mnemonic: process.env.MNEMONIC || "",
-      },
+      accounts: DEPLOYER_PRIVATE_KEY ? [`0x${DEPLOYER_PRIVATE_KEY}`] : [],
     },
     arbitrumsepolia: {
       url: process.env.ARCHIVE_NODE_arbitrumsepolia || "https://sepolia-rollup.arbitrum.io/rpc",
       chainId: 421614,
       live: true,
+      tags: ["testnet"],
       accounts: DEPLOYER_PRIVATE_KEY ? [`0x${DEPLOYER_PRIVATE_KEY}`] : [],
     },
     arbitrumone: {
@@ -189,6 +185,7 @@ const config: HardhatUserConfig = {
       url: process.env.ARCHIVE_NODE_opsepolia || "https://sepolia.optimism.io",
       chainId: 11155420,
       live: true,
+      tags: ["testnet"],
       accounts: DEPLOYER_PRIVATE_KEY ? [`0x${DEPLOYER_PRIVATE_KEY}`] : [],
     },
     opmainnet: {
@@ -201,6 +198,7 @@ const config: HardhatUserConfig = {
       url: process.env.ARCHIVE_NODE_basesepolia || "https://sepolia.base.org",
       chainId: 84532,
       live: true,
+      tags: ["testnet"],
       accounts: DEPLOYER_PRIVATE_KEY ? [`0x${DEPLOYER_PRIVATE_KEY}`] : [],
     },
     basemainnet: {
@@ -213,6 +211,7 @@ const config: HardhatUserConfig = {
       url: process.env.ARCHIVE_NODE_unichainsepolia || "https://sepolia.unichain.org",
       chainId: 1301,
       live: true,
+      tags: ["testnet"],
       accounts: DEPLOYER_PRIVATE_KEY ? [`0x${DEPLOYER_PRIVATE_KEY}`] : [],
     },
     unichainmainnet: {
@@ -225,7 +224,7 @@ const config: HardhatUserConfig = {
       url: process.env.ARCHIVE_NODE_berachainbepolia || "https://bepolia.rpc.berachain.com",
       chainId: 80069,
       live: true,
-      accounts: process.env.DEPLOYER_PRIVATE_KEY ? [`0x${process.env.DEPLOYER_PRIVATE_KEY}`] : [],
+      accounts: DEPLOYER_PRIVATE_KEY ? [`0x${DEPLOYER_PRIVATE_KEY}`] : [],
     },
   },
   gasReporter: {

@@ -97,6 +97,7 @@ npx hardhat deploy --config hardhat.config.zksync.ts --network zksyncsepolia
 ```
 
 Available ZKSync networks:
+
 - `zksyncsepolia` - ZKSync Sepolia testnet
 - `zksyncmainnet` - ZKSync mainnet
 
