@@ -395,6 +395,10 @@ const config: HardhatUserConfig = {
     paths: [
       "hardhat-deploy/solc_0.8/proxy/OptimizedTransparentUpgradeableProxy.sol",
       "hardhat-deploy/solc_0.8/openzeppelin/proxy/transparent/ProxyAdmin.sol",
+      "@safe-global/safe-contracts/contracts/Safe.sol",
+      "@safe-global/safe-contracts/contracts/proxies/SafeProxyFactory.sol",
+      "@safe-global/safe-contracts/contracts/proxies/SafeProxy.sol",
+      "@safe-global/safe-contracts/contracts/libraries/MultiSendCallOnly.sol",
     ],
   },
 };

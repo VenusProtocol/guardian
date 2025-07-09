@@ -10,8 +10,11 @@
     "deployments"
   ],
   "scripts": {
-    "compile": "hardhat compile && hardhat compile --config hardhat.config.zksync.ts",
+    "compile": "hardhat compile",
+    "compile:zk": "hardhat compile --config hardhat.config.zksync.ts",
+    "compile:all": "hardhat compile && hardhat compile --config hardhat.config.zksync.ts",
     "test": "hardhat test",
+    "test:fork": "FORK=true FORKED_NETWORK=bscmainnet hardhat test fork-tests/* --network hardhat",
     "hardhat:compile": "hardhat compile",
     "hardhat:coverage": "hardhat coverage",
     "lint": "yarn lint:sol && yarn lint:ts && yarn prettier:check",
