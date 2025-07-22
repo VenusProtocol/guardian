@@ -3,8 +3,9 @@ import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { expect } from "chai";
 import { parseEther } from "ethers/lib/utils";
 import { ethers } from "hardhat";
+import { FakeContract, MockContract, smock } from "@defi-wonderland/smock";
 
-import { SafeGuard, SafeGuard__factory } from "../typechain";
+import { SafeGuard, SafeGuard__factory, ISafe } from "../typechain";
 
 const createFakeSafe = async (address: string): Promise<SignerWithAddress> => {
   await impersonateAccount(address);
@@ -27,11 +28,13 @@ describe("SafeGuard", function () {
   let auditor3: SignerWithAddress;
   let nonExecutor: SignerWithAddress;
   let safeWallet: SignerWithAddress;
+  let safeWalletFake: FakeContract<ISafe>;
 
   beforeEach(async function () {
     [owner, executor1, executor2, executor3, nonExecutor, auditor1, auditor2, auditor3] = await ethers.getSigners();
     const safeGuardFactory = new SafeGuard__factory(owner);
     safeGuard = await safeGuardFactory.deploy();
+    safeWalletFake = await smock.fake<ISafe>("ISafe");
     safeWallet = await createFakeSafe("0x1234567890123456789012345678901234567890");
   });
 
@@ -380,6 +383,76 @@ describe("SafeGuard", function () {
 
       const auditors = await safeGuard.auditors(safeWallet.address);
       expect(auditors.length).to.equal(0);
+    });
+  })
+
+  describe("addMessageHash", async function () {
+    beforeEach(async function () {
+      await impersonateAccount(safeWalletFake.address);
+      await setBalance(safeWalletFake.address, parseEther("2"));
+      let signer = await ethers.getSigner(safeWalletFake.address);
+      await safeGuard.connect(signer).addAuditor(auditor1.address);
+    });
+
+    it("should add message hash successfully", async function () {
+      const messageHash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes("test message"));
+      await expect(safeGuard.connect(auditor1).addMessageHash(
+        safeWalletFake.address,
+        1,
+        messageHash,
+      ))
+        .to.emit(safeGuard, "MessageHashAdded")
+        .withArgs(safeWalletFake.address, 1, messageHash);
+    });
+
+    it("should revert when adding message hash by non-auditor", async function () {
+      const messageHash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes("test message"));
+      await expect(safeGuard.connect(executor1).addMessageHash(
+        safeWalletFake.address,
+        1,
+        messageHash,
+      )).to.be.revertedWithCustomError(safeGuard, "AuditorNotAllowed")
+    });
+  })
+
+  describe("addMessageHashs", async function () {
+    beforeEach(async function () {
+      await impersonateAccount(safeWalletFake.address);
+      await setBalance(safeWalletFake.address, parseEther("2"));
+      let signer = await ethers.getSigner(safeWalletFake.address);
+      await safeGuard.connect(signer).addAuditor(auditor1.address);
+    });
+
+    it("should add multiple message hashes successfully", async function () {
+      const messageHashes = [
+        ethers.utils.keccak256(ethers.utils.toUtf8Bytes("message 1")),
+        ethers.utils.keccak256(ethers.utils.toUtf8Bytes("message 2")),
+      ];
+      const nonces = [1, 2];
+
+      await expect(safeGuard.connect(auditor1).addMessageHashes(
+        safeWalletFake.address,
+        nonces,
+        messageHashes,
+      ))
+        .to.emit(safeGuard, "MessageHashAdded")
+        .withArgs(safeWalletFake.address, 1, messageHashes[0])
+        .and.to.emit(safeGuard, "MessageHashAdded")
+        .withArgs(safeWalletFake.address, 2, messageHashes[1]);
+    });
+
+    it("should revert when adding multiple message hashes by non-auditor", async function () {
+      const messageHashes = [
+        ethers.utils.keccak256(ethers.utils.toUtf8Bytes("message 1")),
+        ethers.utils.keccak256(ethers.utils.toUtf8Bytes("message 2")),
+      ];
+      const nonces = [1, 2];
+
+      await expect(safeGuard.connect(executor1).addMessageHashes(
+        safeWalletFake.address,
+        nonces,
+        messageHashes,
+      )).to.be.revertedWithCustomError(safeGuard, "AuditorNotAllowed");
     });
   })
 

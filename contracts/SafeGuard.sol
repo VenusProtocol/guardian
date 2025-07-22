@@ -14,6 +14,11 @@ import { EnumerableSet } from "@openzeppelin/contracts/utils/structs/EnumerableS
 contract SafeGuard is BaseGuard {
     using EnumerableSet for EnumerableSet.AddressSet;
 
+    // keccak256(
+    //     "SafeTx(address to,uint256 value,bytes data,uint8 operation,uint256 safeTxGas,uint256 baseGas,uint256 gasPrice,address gasToken,address refundReceiver,uint256 nonce)"
+    // );
+    bytes32 private constant SAFE_TX_TYPEHASH = 0xbb8310d486368db6bd6f849402fdd73ad53d316b5a4b2644ad6efe0f941286d8;
+
     /// @notice Mapping from Safe wallet address to its set of authorized executors
     mapping(address => EnumerableSet.AddressSet) private _executors;
 
@@ -34,6 +39,9 @@ contract SafeGuard is BaseGuard {
 
     /// @notice Emitted when an auditor is removed from a Safe's auditor list
     event AuditorRemoved(address indexed account, address indexed auditor);
+
+    /// @notice Emitted when a message hash is added for a Safe wallet and nonce
+    event MessageHashAdded(address indexed account, uint256 nonce, bytes32 hash);
 
     /// @notice Emitted when a Safe transaction is executed
     event SafeTxData(
@@ -132,7 +140,7 @@ contract SafeGuard is BaseGuard {
      * @param _nonce_list Array of nonces for the transactions
      * @param _hash_list Array of message hashes to add
      */
-    function addMessageHash(
+    function addMessageHashes(
         address _vault,
         uint256[] memory _nonce_list,
         bytes32[] memory _hash_list
@@ -283,7 +291,7 @@ contract SafeGuard is BaseGuard {
         if (auditorLength != 0) {
             if (to != address(msg.sender) || data.length != 0) {
                 //Check hash
-                bytes32 hash = ISafe(msg.sender).getTransactionHash(
+                bytes32 hash = encodeTransactionData(
                     to,
                     value,
                     data,
@@ -348,6 +356,49 @@ contract SafeGuard is BaseGuard {
      */
     function checkAfterExecution(bytes32, bool) external view override {}
 
+    /// @dev Returns the bytes that are hashed to be signed by owners.
+    /// @param to Destination address.
+    /// @param value Ether value.
+    /// @param data Data payload.
+    /// @param operation Operation type.
+    /// @param safeTxGas Gas that should be used for the safe transaction.
+    /// @param baseGas Gas costs for that are independent of the transaction execution(e.g. base transaction fee, signature check, payment of the refund)
+    /// @param gasPrice Maximum gas price that should be used for this transaction.
+    /// @param gasToken Token address (or 0 if ETH) that is used for the payment.
+    /// @param refundReceiver Address of receiver of gas payment (or 0 if tx.origin).
+    /// @param _nonce Transaction nonce.
+    /// @return Message hash bytes.
+    function encodeTransactionData(
+        address to,
+        uint256 value,
+        bytes memory data,
+        Enum.Operation operation,
+        uint256 safeTxGas,
+        uint256 baseGas,
+        uint256 gasPrice,
+        address gasToken,
+        address refundReceiver,
+        uint256 _nonce
+    ) public pure returns (bytes32) {
+        bytes32 safeTxHash =
+            keccak256(
+                abi.encode(
+                    SAFE_TX_TYPEHASH,
+                    to,
+                    value,
+                    keccak256(data),
+                    operation,
+                    safeTxGas,
+                    baseGas,
+                    gasPrice,
+                    gasToken,
+                    refundReceiver,
+                    _nonce
+                )
+            );
+        return safeTxHash;
+    }
+
     /**
      * @notice Internal function to add a message hash for a specific Safe wallet and nonce
      * @param _vault The address of the Safe wallet
@@ -362,6 +413,7 @@ contract SafeGuard is BaseGuard {
             revert InvalidNonce();
         }
         messagehash[_vault][_nonce] = _hash;
+        emit MessageHashAdded(_vault, _nonce, _hash);
     }
 
     /**
