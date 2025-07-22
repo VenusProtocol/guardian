@@ -324,15 +324,6 @@ contract SafeGuard is BaseGuard {
     }
 
     /**
-     * @notice Returns the nonce of the Safe wallet
-     * @param _vault The address of the Safe wallet
-     * @return Nonce of the Safe wallet
-     */
-    function getVaultNonce(address _vault) external view returns (uint256) {
-        return ISafe(_vault).nonce();
-    }
-
-    /**
      * @notice Returns the list of executors for a given Safe wallet
      * @param _vault The address of the Safe wallet
      * @return _executorsArray Array of executor addresses for the specified Safe
