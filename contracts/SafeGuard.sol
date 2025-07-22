@@ -14,23 +14,28 @@ import { EnumerableSet } from "@openzeppelin/contracts/utils/structs/EnumerableS
 contract SafeGuard is BaseGuard {
     using EnumerableSet for EnumerableSet.AddressSet;
 
-    bytes32 private constant SAFE_TX_TYPEHASH = 0xbb8310d486368db6bd6f849402fdd73ad53d316b5a4b2644ad6efe0f941286d8;
-
-    /* ============ Global States ============ */
-    // account => executors
+    /// @notice Mapping from Safe wallet address to its set of authorized executors
     mapping(address => EnumerableSet.AddressSet) private _executors;
 
-    // account => bot
+    /// @notice Mapping from Safe wallet address to its set of authorized auditors
     mapping(address => EnumerableSet.AddressSet) private _auditors;
-    // account => nonce => hash
+
+    /// @notice Mapping from Safe wallet address and nonce to the message hash
     mapping(address => mapping(uint256 => bytes32)) public messagehash;
 
-    /* ============ Events ============ */
+    /// @notice Emitted when an executor is added to a Safe's executor list
     event ExecutorAdded(address indexed account, address indexed executor);
+
+    /// @notice Emitted when an executor is removed from a Safe's executor list
     event ExecutorRemoved(address indexed account, address indexed executor);
+
+    /// @notice Emitted when an auditor is added to a Safe's auditor list
     event AuditorAdded(address indexed account, address indexed auditor);
+
+    /// @notice Emitted when an auditor is removed from a Safe's auditor list
     event AuditorRemoved(address indexed account, address indexed auditor);
-    //logging event in case of auditors
+
+    /// @notice Emitted when a Safe transaction is executed
     event SafeTxData(
         address to,
         uint256 value,
@@ -45,14 +50,56 @@ contract SafeGuard is BaseGuard {
         bytes32 messagehash
     );
 
-    error InvalidMessagehash(bytes32 message);
+    /// @notice Error thrown when an address is zero
+    error ZeroAddress();
+
+    /// @notice Error thrown when attempting to add an executor that already exists
+    /// @param executor The address of the executor that already exists
+    error ExecutorExists(address executor);
+
+    /// @notice Error thrown when attempting to remove an executor that doesn't exist
+    /// @param executor The address of the executor that doesn't exist
+    error ExecutorDoesNotExist(address executor);
+
+    /// @notice Error thrown when a transaction is executed by an unauthorized account
+    /// @param msgSender The address of the unauthorized executor
+    error NotExecutor(address msgSender);
+
+    /// @notice Error thrown when a function is called by an EOA instead of a contract
+    error ContractNotAllowed();
+
+    /// @notice Error thrown when a function is called by an EOA instead of an auditor
+    error AuditorNotAllowed();
+
+    /// @notice Error thrown when input array length is zero or two array lengths are not equal
+    error InvalidLength();
+
+    /// @notice Error thrown when an auditor already exists
+    error AuditorExists(address auditor);
+
+    /// @notice Error thrown when an auditor does not exist
+    error AuditorDoesNotExist(address auditor);
+
+    /// @notice Error thrown when a message hash is invalid
+    error InvalidHash();
+
+    /// @notice Error thrown when a message hash is zero
+    error ZeroHash();
+
+    /// @notice Error thrown when a nonce is invalid
+    error InvalidNonce();
+
     modifier onlyContract() {
-        require(isContract(msg.sender), "SafeGuard: Contract is not allowed");
+        if (!_isContract(msg.sender)) {
+            revert ContractNotAllowed();
+        }
         _;
     }
 
     modifier onlyAuditor(address _vault) {
-        require(_auditors[_vault].contains(msg.sender), "SafeGuard: NotAuditor");
+        if (!_auditors[_vault].contains(msg.sender)) {
+            revert AuditorNotAllowed();
+        }
         _;
     }
 
@@ -71,63 +118,93 @@ contract SafeGuard is BaseGuard {
         uint256[] memory _nonce_list,
         bytes32[] memory _hash_list
     ) external onlyAuditor(_vault) {
-        require(_nonce_list.length == _hash_list.length, "SafeGuard: ZeroHash");
+        if (_nonce_list.length == 0 || _hash_list.length == 0) {
+            revert InvalidLength();
+        }
         for (uint256 i = 0; i < _nonce_list.length; ++i) {
             _addMessageHash(_vault, _nonce_list[i], _hash_list[i]);
         }
     }
 
     function addExecutors(address[] calldata _executorsList) external onlyContract {
-        require(_executorsList.length > 0, "SafeGuard: InvalidExecutors");
+        if (_executorsList.length == 0) {
+            revert InvalidLength();
+        }
         address _account = msg.sender;
         EnumerableSet.AddressSet storage exe = _executors[_account];
         for (uint256 i; i < _executorsList.length; i++) {
-            require(_executorsList[i] != address(0), "SafeGuard: ZeroAddress");
-            require(exe.add(_executorsList[i]), "SafeGuard: ExecutorExists");
+            if (_executorsList[i] == address(0)) {
+                revert ZeroAddress();
+            }
+            if (!exe.add(_executorsList[i])) {
+                revert ExecutorExists(_executorsList[i]);
+            }
             emit ExecutorAdded(_account, _executorsList[i]);
         }
     }
 
     function addAuditors(address[] calldata _auditorsList) external onlyContract {
-        require(_auditorsList.length > 0, "SafeGuard: InvalidAuditors");
+        if (_auditorsList.length == 0) {
+            revert InvalidLength();
+        }
         address _account = msg.sender;
         EnumerableSet.AddressSet storage axe = _auditors[_account];
         for (uint256 i; i < _auditorsList.length; i++) {
-            require(_auditorsList[i] != address(0), "SafeGuard: ZeroAddress");
-            require(axe.add(_auditorsList[i]), "SafeGuard: AuditorExists");
+            if (_auditorsList[i] == address(0)) {
+                revert ZeroAddress();
+            }
+            if (!axe.add(_auditorsList[i])) {
+                revert AuditorExists(_auditorsList[i]);
+            }
             emit AuditorAdded(_account, _auditorsList[i]);
         }
     }
 
     function addExecutor(address _executor) external onlyContract {
-        require(_executor != address(0), "SafeGuard: InvalidExecutor");
+        if (_executor == address(0)) {
+            revert ZeroAddress();
+        }
         address _account = msg.sender;
         EnumerableSet.AddressSet storage exe = _executors[_account];
-        require(exe.add(_executor), "SafeGuard: ExecutorExists");
+        if (!exe.add(_executor)) {
+            revert ExecutorExists(_executor);
+        }
         emit ExecutorAdded(_account, _executor);
     }
 
     function addAuditor(address _auditor) external onlyContract {
-        require(_auditor != address(0), "SafeGuard: InvalidAuditor");
+        if (_auditor == address(0)) {
+            revert ZeroAddress();
+        }
         address _account = msg.sender;
         EnumerableSet.AddressSet storage axe = _auditors[_account];
-        require(axe.add(_auditor), "SafeGuard: AuditorExists");
+        if (!axe.add(_auditor)) {
+            revert AuditorExists(_auditor);
+        }
         emit AuditorAdded(_account, _auditor);
     }
 
     function removeExecutor(address _executor) external onlyContract {
-        require(_executor != address(0), "SafeGuard: InvalidExecutor");
+        if (_executor == address(0)) {
+            revert ZeroAddress();
+        }
         address _account = msg.sender;
         EnumerableSet.AddressSet storage exe = _executors[_account];
-        require(exe.remove(_executor), "SafeGuard: InvalidExecutor");
+        if (!exe.remove(_executor)) {
+            revert ExecutorDoesNotExist(_executor);
+        }
         emit ExecutorRemoved(_account, _executor);
     }
 
     function removeAuditor(address _auditor) external onlyContract {
-        require(_auditor != address(0), "SafeGuard: InvalidAuditor");
+        if (_auditor == address(0)) {
+            revert ZeroAddress();
+        }
         address _account = msg.sender;
         EnumerableSet.AddressSet storage axe = _auditors[_account];
-        require(axe.remove(_auditor), "SafeGuard: InvalidAuditor");
+        if (!axe.remove(_auditor)) {
+            revert AuditorDoesNotExist(_auditor);
+        }
         emit AuditorRemoved(_account, _auditor);
     }
 
@@ -152,14 +229,14 @@ contract SafeGuard is BaseGuard {
     ) external override {
         uint256 executerLength = _executors[msg.sender].length();
         uint256 auditorLength = _auditors[msg.sender].length();
-        if (executerLength != 0) {
-            require(_executors[msg.sender].contains(msgSender), "SafeGuard: NotExecutor");
+        if (executerLength != 0 && !_executors[msg.sender].contains(msgSender)) {
+            revert NotExecutor(msgSender);
         }
 
         if (auditorLength != 0) {
             if (to != address(msg.sender) || data.length != 0) {
                 //Check hash
-                bytes32 hash = encodeTransactionData(
+                bytes32 hash = ISafe(msg.sender).getTransactionHash(
                     to,
                     value,
                     data,
@@ -171,7 +248,9 @@ contract SafeGuard is BaseGuard {
                     refundReceiver,
                     (ISafe(msg.sender).nonce()) - 1
                 );
-                require(messagehash[msg.sender][ISafe(msg.sender).nonce() - 1] == hash, "SafeGuard: InvalidHash");
+                if (messagehash[msg.sender][ISafe(msg.sender).nonce() - 1] != hash) {
+                    revert InvalidHash();
+                }
                 emit SafeTxData(
                     to,
                     value,
@@ -207,55 +286,17 @@ contract SafeGuard is BaseGuard {
      */
     function checkAfterExecution(bytes32, bool) external view override {}
 
-    /// @dev Returns the bytes that are hashed to be signed by owners.
-    /// @param to Destination address.
-    /// @param value Ether value.
-    /// @param data Data payload.
-    /// @param operation Operation type.
-    /// @param safeTxGas Gas that should be used for the safe transaction.
-    /// @param baseGas Gas costs for that are independent of the transaction execution(e.g. base transaction fee, signature check, payment of the refund)
-    /// @param gasPrice Maximum gas price that should be used for this transaction.
-    /// @param gasToken Token address (or 0 if ETH) that is used for the payment.
-    /// @param refundReceiver Address of receiver of gas payment (or 0 if tx.origin).
-    /// @param _nonce Transaction nonce.
-    /// @return Message hash bytes.
-    function encodeTransactionData(
-        address to,
-        uint256 value,
-        bytes memory data,
-        Enum.Operation operation,
-        uint256 safeTxGas,
-        uint256 baseGas,
-        uint256 gasPrice,
-        address gasToken,
-        address refundReceiver,
-        uint256 _nonce
-    ) public pure returns (bytes32) {
-        bytes32 safeTxHash = keccak256(
-            abi.encode(
-                SAFE_TX_TYPEHASH,
-                to,
-                value,
-                keccak256(data),
-                operation,
-                safeTxGas,
-                baseGas,
-                gasPrice,
-                gasToken,
-                refundReceiver,
-                _nonce
-            )
-        );
-        return safeTxHash;
-    }
-
     function _addMessageHash(address _vault, uint256 _nonce, bytes32 _hash) internal {
-        require(_hash != bytes32(0), "SafeGuard: ZeroHash");
-        require(_nonce >= ISafe(_vault).nonce(), "SafeGuard: Nonce not valid");
+        if (_hash == bytes32(0)) {
+            revert ZeroHash();
+        }
+        if (_nonce < ISafe(_vault).nonce()) {
+            revert InvalidNonce();
+        }
         messagehash[_vault][_nonce] = _hash;
     }
 
-    function isContract(address addr) internal view returns (bool) {
+    function _isContract(address addr) internal view returns (bool) {
         uint size;
         assembly {
             size := extcodesize(addr)
