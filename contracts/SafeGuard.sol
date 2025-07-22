@@ -89,6 +89,9 @@ contract SafeGuard is BaseGuard {
     /// @notice Error thrown when a nonce is invalid
     error InvalidNonce();
 
+    /**
+     * @notice Modifier that ensures only contracts can call the function
+     */
     modifier onlyContract() {
         if (!_isContract(msg.sender)) {
             revert ContractNotAllowed();
@@ -96,6 +99,10 @@ contract SafeGuard is BaseGuard {
         _;
     }
 
+    /**
+     * @notice Modifier that ensures only auditors can call the function
+     * @param _vault The address of the Safe wallet
+     */
     modifier onlyAuditor(address _vault) {
         if (!_auditors[_vault].contains(msg.sender)) {
             revert AuditorNotAllowed();
@@ -103,16 +110,28 @@ contract SafeGuard is BaseGuard {
         _;
     }
 
-    constructor() {}
-
     // solhint-disable-next-line payable-fallback
     fallback() external {
         // We don't revert on fallback to avoid issues in case of a Safe upgrade
         // E.g. The expected check method might change and then the Safe would be locked.
     }
 
-    function addMessageHash(address _vault, uint256 _nonce, bytes32 _hash) external onlyAuditor(_vault) {}
+    /**
+     * @notice Adds a message hash for a specific Safe wallet and nonce
+     * @param _vault The address of the Safe wallet
+     * @param _nonce The nonce for the transaction
+     * @param _hash The message hash to add
+     */
+    function addMessageHash(address _vault, uint256 _nonce, bytes32 _hash) external onlyAuditor(_vault) {
+        _addMessageHash(_vault, _nonce, _hash);
+    }
 
+    /**
+     * @notice Adds multiple message hashes for a specific Safe wallet
+     * @param _vault The address of the Safe wallet
+     * @param _nonce_list Array of nonces for the transactions
+     * @param _hash_list Array of message hashes to add
+     */
     function addMessageHash(
         address _vault,
         uint256[] memory _nonce_list,
@@ -126,6 +145,11 @@ contract SafeGuard is BaseGuard {
         }
     }
 
+    /**
+     * @notice Adds multiple executors to the calling Safe's executor list
+     * @param _executorsList Array of executor addresses to add
+     * @dev This function can only be called by contracts (Safe wallets)
+     */
     function addExecutors(address[] calldata _executorsList) external onlyContract {
         if (_executorsList.length == 0) {
             revert InvalidLength();
@@ -143,6 +167,11 @@ contract SafeGuard is BaseGuard {
         }
     }
 
+    /**
+     * @notice Adds multiple auditors to the calling Safe's auditor list
+     * @param _auditorsList Array of auditor addresses to add
+     * @dev This function can only be called by contracts (Safe wallets)
+     */
     function addAuditors(address[] calldata _auditorsList) external onlyContract {
         if (_auditorsList.length == 0) {
             revert InvalidLength();
@@ -160,6 +189,11 @@ contract SafeGuard is BaseGuard {
         }
     }
 
+    /**
+     * @notice Adds a single executor to the calling Safe's executor list
+     * @param _executor The address of the executor to add
+     * @dev This function can only be called by contracts (Safe wallets)
+     */
     function addExecutor(address _executor) external onlyContract {
         if (_executor == address(0)) {
             revert ZeroAddress();
@@ -172,6 +206,11 @@ contract SafeGuard is BaseGuard {
         emit ExecutorAdded(_account, _executor);
     }
 
+    /**
+     * @notice Adds a single auditor to the calling Safe's auditor list
+     * @param _auditor The address of the auditor to add
+     * @dev This function can only be called by contracts (Safe wallets)
+     */
     function addAuditor(address _auditor) external onlyContract {
         if (_auditor == address(0)) {
             revert ZeroAddress();
@@ -184,6 +223,11 @@ contract SafeGuard is BaseGuard {
         emit AuditorAdded(_account, _auditor);
     }
 
+    /**
+     * @notice Removes a single executor from the calling Safe's executor list
+     * @param _executor The address of the executor to remove
+     * @dev This function can only be called by contracts (Safe wallets)
+     */
     function removeExecutor(address _executor) external onlyContract {
         if (_executor == address(0)) {
             revert ZeroAddress();
@@ -196,6 +240,11 @@ contract SafeGuard is BaseGuard {
         emit ExecutorRemoved(_account, _executor);
     }
 
+    /**
+     * @notice Removes a single auditor from the calling Safe's auditor list
+     * @param _auditor The address of the auditor to remove
+     * @dev This function can only be called by contracts (Safe wallets)
+     */
     function removeAuditor(address _auditor) external onlyContract {
         if (_auditor == address(0)) {
             revert ZeroAddress();
@@ -210,8 +259,6 @@ contract SafeGuard is BaseGuard {
 
     /**
      * @notice Called by the Safe contract before a transaction is executed.
-     * @dev Reverts if the transaction is not executed by an owner.
-     * @param msgSender Executor of the transaction.
      */
     function checkTransaction(
         address to,
@@ -268,14 +315,29 @@ contract SafeGuard is BaseGuard {
         }
     }
 
+    /**
+     * @notice Returns the nonce of the Safe wallet
+     * @param _vault The address of the Safe wallet
+     * @return Nonce of the Safe wallet
+     */
     function getVaultNonce(address _vault) external view returns (uint256) {
         return ISafe(_vault).nonce();
     }
 
+    /**
+     * @notice Returns the list of executors for a given Safe wallet
+     * @param _vault The address of the Safe wallet
+     * @return _executorsArray Array of executor addresses for the specified Safe
+     */
     function executors(address _vault) external view returns (address[] memory _executorsArray) {
         return _executors[_vault].values();
     }
 
+    /**
+     * @notice Returns the list of auditors for a given Safe wallet
+     * @param _vault The address of the Safe wallet
+     * @return _auditorsArray Array of auditor addresses for the specified Safe
+     */
     function auditors(address _vault) external view returns (address[] memory _auditorsArray) {
         return _auditors[_vault].values();
     }
@@ -286,6 +348,12 @@ contract SafeGuard is BaseGuard {
      */
     function checkAfterExecution(bytes32, bool) external view override {}
 
+    /**
+     * @notice Internal function to add a message hash for a specific Safe wallet and nonce
+     * @param _vault The address of the Safe wallet
+     * @param _nonce The nonce for the transaction
+     * @param _hash The message hash to add
+     */
     function _addMessageHash(address _vault, uint256 _nonce, bytes32 _hash) internal {
         if (_hash == bytes32(0)) {
             revert ZeroHash();
@@ -296,6 +364,11 @@ contract SafeGuard is BaseGuard {
         messagehash[_vault][_nonce] = _hash;
     }
 
+    /**
+     * @notice Internal function to check if an address is a contract
+     * @param addr The address to check
+     * @return True if the address is a contract, false otherwise
+     */
     function _isContract(address addr) internal view returns (bool) {
         uint size;
         assembly {
