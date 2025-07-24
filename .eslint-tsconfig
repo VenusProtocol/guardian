@@ -4,7 +4,7 @@
     "jest.config.js",
     ".eslintrc.js",
     "test",
-    "scenario",
+    "fork-tests",
     "deploy",
     "docgen-templates",
     "commitlint.config.js",
