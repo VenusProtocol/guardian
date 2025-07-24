@@ -11,7 +11,6 @@ import {
   DrillLegacyComptroller__factory,
   DrillVToken,
   DrillVToken__factory,
-  SafeProxy__factory,
   VenusPauseModule,
   VenusPauseModule__factory,
 } from "../typechain";
@@ -56,44 +55,78 @@ const executeSafeTransaction = async (safe: Safe, to: string, data: string, sign
   return safe.execTransaction(...tx, getApprovedHashSignature(signer));
 };
 
+const deploySafeSingletons = (() => {
+  let safeSingleton: Safe;
+  let safeProxyFactory: SafeProxyFactory;
+  let multiSendCallOnly: MultiSendCallOnly;
+
+  return async (
+    owner: SignerWithAddress,
+  ): Promise<{
+    safeSingleton: Safe;
+    safeProxyFactory: SafeProxyFactory;
+    multiSendCallOnly: MultiSendCallOnly;
+  }> => {
+    if (!safeSingleton) {
+      const SafeFactory = new Safe__factory(owner);
+      safeSingleton = await SafeFactory.deploy();
+      await safeSingleton.deployed();
+    }
+    if (!safeProxyFactory) {
+      const SafeProxyFactoryFactory = new SafeProxyFactory__factory(owner);
+      safeProxyFactory = await SafeProxyFactoryFactory.deploy();
+      await safeProxyFactory.deployed();
+    }
+    if (!multiSendCallOnly) {
+      const MultiSendCallOnlyFactory = new MultiSendCallOnly__factory(owner);
+      multiSendCallOnly = await MultiSendCallOnlyFactory.deploy();
+      await multiSendCallOnly.deployed();
+    }
+    return { safeSingleton, safeProxyFactory, multiSendCallOnly };
+  };
+})();
+
+const deploySafe = async (
+  safeSingleton: Safe,
+  safeProxyFactory: SafeProxyFactory,
+  owner: SignerWithAddress,
+  nonce: number,
+) => {
+  const setupData = safeSingleton.interface.encodeFunctionData("setup", [
+    [owner.address], // owners
+    1, // threshold
+    ethers.constants.AddressZero, // to
+    "0x", // data
+    ethers.constants.AddressZero, // fallbackHandler
+    ethers.constants.AddressZero, // paymentToken
+    0, // payment
+    ethers.constants.AddressZero, // paymentReceiver
+  ]);
+
+  const saltNonce = ethers.utils.hexZeroPad(ethers.utils.hexlify(nonce), 32);
+  const createProxyTx = await safeProxyFactory.createProxyWithNonce(safeSingleton.address, setupData, saltNonce);
+  const receipt = await createProxyTx.wait();
+  const proxyCreatedEvent = receipt.events?.find(e => e.event === "ProxyCreation");
+  const proxyAddress = proxyCreatedEvent?.args?.proxy;
+  if (!proxyAddress) {
+    throw new Error("Failed to get proxy address from event");
+  }
+
+  const SafeFactory = new Safe__factory(owner);
+  const safe = SafeFactory.attach(proxyAddress);
+  return safe;
+};
+
 const setup = async (): Promise<TestFixture> => {
   const [owner, keeper, user1, user2] = await ethers.getSigners();
 
-  const safeFactory = new Safe__factory(owner);
-  const safeSingleton = await safeFactory.deploy();
-
-  const safeProxyFactory = new SafeProxy__factory(owner);
-  const safeProxy = await safeProxyFactory.deploy(safeSingleton.address);
-
-  console.log("Safe singleton deployed at:", safeSingleton.address);
-  console.log("SafeProxy deployed at:", safeProxy.address);
-
-  const venusGuardian = await safeFactory.attach(safeProxy.address);
-  await venusGuardian.setup(
-    [owner.address],
-    1,
-    ethers.constants.AddressZero,
-    "0x00",
-    ethers.constants.AddressZero,
-    ethers.constants.AddressZero,
-    "0",
-    ethers.constants.AddressZero,
-  );
-
-  console.log("Venus Guardian Safe deployed at:", venusGuardian.address);
-
-  const MultiSendCallOnlyFactory = new MultiSendCallOnly__factory(owner);
-  const multiSendCallOnly = await MultiSendCallOnlyFactory.deploy();
-  await multiSendCallOnly.deployed();
-
-  console.log("MultiSendCallOnly deployed at:", multiSendCallOnly.address);
+  const { safeSingleton, safeProxyFactory, multiSendCallOnly } = await deploySafeSingletons(owner);
+  const venusGuardian = await deploySafe(safeSingleton, safeProxyFactory, owner, 1);
 
   // Deploy isolated pool contracts
   const DrillComptrollerFactory = new DrillComptroller__factory(owner);
   const drillComptroller = await DrillComptrollerFactory.deploy(owner.address);
   await drillComptroller.deployed();
-
-  console.log("DrillComptroller deployed at:", drillComptroller.address);
 
   const DrillVTokenFactory = new DrillVToken__factory(owner);
   const drillVToken = await DrillVTokenFactory.deploy(
@@ -106,13 +139,9 @@ const setup = async (): Promise<TestFixture> => {
   );
   await drillVToken.deployed();
 
-  console.log("DrillVToken deployed at:", drillVToken.address);
-
   const DrillLegacyComptrollerFactory = new DrillLegacyComptroller__factory(owner);
   const drillLegacyComptroller = await DrillLegacyComptrollerFactory.deploy(owner.address);
   await drillLegacyComptroller.deployed();
-
-  console.log("DrillLegacyComptroller deployed at:", drillLegacyComptroller.address);
 
   const drillLegacyVToken = await DrillVTokenFactory.deploy(
     drillLegacyComptroller.address,
@@ -123,8 +152,6 @@ const setup = async (): Promise<TestFixture> => {
     venusGuardian.address,
   );
   await drillLegacyVToken.deployed();
-
-  console.log("DrillLegacyVToken deployed at:", drillLegacyVToken.address);
 
   await drillComptroller.listMarket(
     drillVToken.address,
@@ -198,34 +225,34 @@ describe("VenusPauseModule Integration", function () {
     expect(liquidationThreshold).to.equal(ethers.utils.parseUnits("0.85", 18));
   });
 
-  // it("should pause legacy pool market via Safe when called by keeper", async function () {
-  //   const { venusPauseModule, drillLegacyComptroller, drillLegacyVToken, keeper } = fixture;
+  it("should pause legacy pool market via Safe when called by keeper", async function () {
+    const { venusPauseModule, drillLegacyComptroller, drillLegacyVToken, keeper } = fixture;
 
-  //   // Verify initial state
-  //   expect(await drillLegacyComptroller.actionPaused(drillLegacyVToken.address, ACTION.MINT)).to.be.false;
-  //   expect(await drillLegacyComptroller.actionPaused(drillLegacyVToken.address, ACTION.BORROW)).to.be.false;
-  //   expect(await drillLegacyComptroller.actionPaused(drillLegacyVToken.address, ACTION.ENTER_MARKET)).to.be.false;
+    // Verify initial state
+    expect(await drillLegacyComptroller.actionPaused(drillLegacyVToken.address, ACTION.MINT)).to.be.false;
+    expect(await drillLegacyComptroller.actionPaused(drillLegacyVToken.address, ACTION.BORROW)).to.be.false;
+    expect(await drillLegacyComptroller.actionPaused(drillLegacyVToken.address, ACTION.ENTER_MARKET)).to.be.false;
 
-  //   // Call pauseMarket as keeper
-  //   await venusPauseModule.connect(keeper).pauseMarket(drillLegacyVToken.address);
+    // Call pauseMarket as keeper
+    await venusPauseModule.connect(keeper).pauseMarket(drillLegacyVToken.address);
 
-  //   // Verify market is paused (legacy pool only pauses actions, doesn't set collateral factor to 0)
-  //   expect(await drillLegacyComptroller.actionPaused(drillLegacyVToken.address, ACTION.MINT)).to.be.true;
-  //   expect(await drillLegacyComptroller.actionPaused(drillLegacyVToken.address, ACTION.BORROW)).to.be.true;
-  //   expect(await drillLegacyComptroller.actionPaused(drillLegacyVToken.address, ACTION.ENTER_MARKET)).to.be.true;
+    // Verify market is paused (legacy pool only pauses actions, doesn't set collateral factor to 0)
+    expect(await drillLegacyComptroller.actionPaused(drillLegacyVToken.address, ACTION.MINT)).to.be.true;
+    expect(await drillLegacyComptroller.actionPaused(drillLegacyVToken.address, ACTION.BORROW)).to.be.true;
+    expect(await drillLegacyComptroller.actionPaused(drillLegacyVToken.address, ACTION.ENTER_MARKET)).to.be.true;
 
-  //   // Verify collateral factor is unchanged (legacy pool doesn't modify collateral factor)
-  //   const [isListed, collateralFactor] = await drillLegacyComptroller.markets(drillLegacyVToken.address);
-  //   expect(isListed).to.be.true;
-  //   expect(collateralFactor).to.equal(ethers.utils.parseUnits("0.75", 18)); // Should remain unchanged
-  // });
+    // Verify collateral factor is unchanged (legacy pool doesn't modify collateral factor)
+    const [isListed, collateralFactor] = await drillLegacyComptroller.markets(drillLegacyVToken.address);
+    expect(isListed).to.be.true;
+    expect(collateralFactor).to.equal(ethers.utils.parseUnits("0.75", 18)); // Should remain unchanged
+  });
 
-  // it("should revert when called by non-keeper", async function () {
-  //   const { venusPauseModule, drillVToken, user1 } = fixture;
+  it("should revert when called by non-keeper", async function () {
+    const { venusPauseModule, drillVToken, user1 } = fixture;
 
-  //   await expect(venusPauseModule.connect(user1).pauseMarket(drillVToken.address)).to.be.revertedWithCustomError(
-  //     venusPauseModule,
-  //     "Unauthorized",
-  //   );
-  // });
+    await expect(venusPauseModule.connect(user1).pauseMarket(drillVToken.address)).to.be.revertedWithCustomError(
+      venusPauseModule,
+      "Unauthorized",
+    );
+  });
 });
