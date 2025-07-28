@@ -1,11 +1,11 @@
+import { FakeContract, smock } from "@defi-wonderland/smock";
 import { impersonateAccount, setBalance } from "@nomicfoundation/hardhat-network-helpers";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { expect } from "chai";
 import { parseEther } from "ethers/lib/utils";
 import { ethers } from "hardhat";
-import { FakeContract, MockContract, smock } from "@defi-wonderland/smock";
 
-import { SafeGuard, SafeGuard__factory, ISafe } from "../typechain";
+import { ISafe, SafeGuard, SafeGuard__factory } from "../typechain";
 
 const createFakeSafe = async (address: string): Promise<SignerWithAddress> => {
   await impersonateAccount(address);
@@ -24,7 +24,7 @@ describe("SafeGuard", function () {
   let executor2: SignerWithAddress;
   let executor3: SignerWithAddress;
   let auditor1: SignerWithAddress;
-  let auditor2: SignerWithAddress;  
+  let auditor2: SignerWithAddress;
   let auditor3: SignerWithAddress;
   let nonExecutor: SignerWithAddress;
   let safeWallet: SignerWithAddress;
@@ -260,11 +260,7 @@ describe("SafeGuard", function () {
 
   describe("addAuditors", async function () {
     it("should add auditors successfully", async function () {
-      const auditorsList = [
-        auditor1.address,
-        auditor2.address,
-        auditor3.address,
-      ];
+      const auditorsList = [auditor1.address, auditor2.address, auditor3.address];
 
       await expect(safeGuard.connect(safeWallet).addAuditors(auditorsList))
         .to.emit(safeGuard, "AuditorAdded")
@@ -338,7 +334,7 @@ describe("SafeGuard", function () {
         "ContractNotAllowed",
       );
     });
-  })
+  });
 
   describe("removeAuditor", async function () {
     beforeEach(async function () {
@@ -384,42 +380,36 @@ describe("SafeGuard", function () {
       const auditors = await safeGuard.auditors(safeWallet.address);
       expect(auditors.length).to.equal(0);
     });
-  })
+  });
 
   describe("addMessageHash", async function () {
     beforeEach(async function () {
       await impersonateAccount(safeWalletFake.address);
       await setBalance(safeWalletFake.address, parseEther("2"));
-      let signer = await ethers.getSigner(safeWalletFake.address);
+      const signer = await ethers.getSigner(safeWalletFake.address);
       await safeGuard.connect(signer).addAuditor(auditor1.address);
     });
 
     it("should add message hash successfully", async function () {
       const messageHash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes("test message"));
-      await expect(safeGuard.connect(auditor1).addMessageHash(
-        safeWalletFake.address,
-        1,
-        messageHash,
-      ))
+      await expect(safeGuard.connect(auditor1).addMessageHash(safeWalletFake.address, 1, messageHash))
         .to.emit(safeGuard, "MessageHashAdded")
         .withArgs(safeWalletFake.address, 1, messageHash);
     });
 
     it("should revert when adding message hash by non-auditor", async function () {
       const messageHash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes("test message"));
-      await expect(safeGuard.connect(executor1).addMessageHash(
-        safeWalletFake.address,
-        1,
-        messageHash,
-      )).to.be.revertedWithCustomError(safeGuard, "AuditorNotAllowed")
+      await expect(
+        safeGuard.connect(executor1).addMessageHash(safeWalletFake.address, 1, messageHash),
+      ).to.be.revertedWithCustomError(safeGuard, "AuditorNotAllowed");
     });
-  })
+  });
 
   describe("addMessageHashs", async function () {
     beforeEach(async function () {
       await impersonateAccount(safeWalletFake.address);
       await setBalance(safeWalletFake.address, parseEther("2"));
-      let signer = await ethers.getSigner(safeWalletFake.address);
+      const signer = await ethers.getSigner(safeWalletFake.address);
       await safeGuard.connect(signer).addAuditor(auditor1.address);
     });
 
@@ -430,11 +420,7 @@ describe("SafeGuard", function () {
       ];
       const nonces = [1, 2];
 
-      await expect(safeGuard.connect(auditor1).addMessageHashes(
-        safeWalletFake.address,
-        nonces,
-        messageHashes,
-      ))
+      await expect(safeGuard.connect(auditor1).addMessageHashes(safeWalletFake.address, nonces, messageHashes))
         .to.emit(safeGuard, "MessageHashAdded")
         .withArgs(safeWalletFake.address, 1, messageHashes[0])
         .and.to.emit(safeGuard, "MessageHashAdded")
@@ -448,13 +434,11 @@ describe("SafeGuard", function () {
       ];
       const nonces = [1, 2];
 
-      await expect(safeGuard.connect(executor1).addMessageHashes(
-        safeWalletFake.address,
-        nonces,
-        messageHashes,
-      )).to.be.revertedWithCustomError(safeGuard, "AuditorNotAllowed");
+      await expect(
+        safeGuard.connect(executor1).addMessageHashes(safeWalletFake.address, nonces, messageHashes),
+      ).to.be.revertedWithCustomError(safeGuard, "AuditorNotAllowed");
     });
-  })
+  });
 
   describe("checkAfterExecution", function () {
     it("should not revert (no-op function)", async function () {

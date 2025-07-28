@@ -14,9 +14,7 @@ import { EnumerableSet } from "@openzeppelin/contracts/utils/structs/EnumerableS
 contract SafeGuard is BaseGuard {
     using EnumerableSet for EnumerableSet.AddressSet;
 
-    // keccak256(
-    //     "SafeTx(address to,uint256 value,bytes data,uint8 operation,uint256 safeTxGas,uint256 baseGas,uint256 gasPrice,address gasToken,address refundReceiver,uint256 nonce)"
-    // );
+    /// @notice Typehash for Safe transaction data
     bytes32 private constant SAFE_TX_TYPEHASH = 0xbb8310d486368db6bd6f849402fdd73ad53d316b5a4b2644ad6efe0f941286d8;
 
     /// @notice Mapping from Safe wallet address to its set of authorized executors
@@ -371,22 +369,21 @@ contract SafeGuard is BaseGuard {
         address refundReceiver,
         uint256 _nonce
     ) public pure returns (bytes32) {
-        bytes32 safeTxHash =
-            keccak256(
-                abi.encode(
-                    SAFE_TX_TYPEHASH,
-                    to,
-                    value,
-                    keccak256(data),
-                    operation,
-                    safeTxGas,
-                    baseGas,
-                    gasPrice,
-                    gasToken,
-                    refundReceiver,
-                    _nonce
-                )
-            );
+        bytes32 safeTxHash = keccak256(
+            abi.encode(
+                SAFE_TX_TYPEHASH,
+                to,
+                value,
+                keccak256(data),
+                operation,
+                safeTxGas,
+                baseGas,
+                gasPrice,
+                gasToken,
+                refundReceiver,
+                _nonce
+            )
+        );
         return safeTxHash;
     }
 
