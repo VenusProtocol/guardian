@@ -136,12 +136,9 @@ const setup = async (): Promise<TestFixture> => {
   const { safeSingleton, safeProxyFactory } = await deploySafeSingletons(owner);
   const venusGuardian = await deploySafe(safeSingleton, safeProxyFactory, owner, 1);
 
-  console.log("VenusGuardian deployed at:", venusGuardian.address);
-
   const safeGuardFactory = new SafeGuard__factory(owner);
   const safeGuard = await safeGuardFactory.deploy();
 
-  console.log("SafeGuard deployed at:", safeGuard.address);
   const guardianSigner = await initMainnetUser(venusGuardian.address, parseEther("2"));
 
   await venusGuardian.connect(guardianSigner).setGuard(safeGuard.address);
@@ -192,5 +189,56 @@ describe("VenusPauseModule Integration", function () {
     ).to.be.not.be.reverted;
 
     expect(await ethers.provider.getBalance(user)).to.equal(parseEther("1"));
+  });
+
+  it.only("should check order of transactions", async function () {
+    const user = "0x6666666666666666666666666666666666666668";
+    expect(await ethers.provider.getBalance(user)).to.equal(0);
+
+    await approveHash(
+      fixture.safeGuard,
+      fixture.venusGuardian,
+      parseEther("0.1"),
+      user,
+      "0x",
+      await fixture.venusGuardian.nonce(), // 0
+      fixture.auditor,
+    );
+
+    await approveHash(
+      fixture.safeGuard,
+      fixture.venusGuardian,
+      parseEther("0.2"),
+      user,
+      "0x",
+      (await fixture.venusGuardian.nonce()).add(1), // 1
+      fixture.auditor,
+    );
+
+    await approveHash(
+      fixture.safeGuard,
+      fixture.venusGuardian,
+      parseEther("0.3"),
+      user,
+      "0x",
+      (await fixture.venusGuardian.nonce()).add(2), // 2
+      fixture.auditor,
+    );
+
+    await expect(
+      executeSafeTransaction(fixture.venusGuardian, parseEther("0.1"), user, "0x", fixture.owner, fixture.executor),
+    ).to.be.not.be.reverted;
+
+    await expect(
+      executeSafeTransaction(fixture.venusGuardian, parseEther("0.3"), user, "0x", fixture.owner, fixture.executor),
+    ).to.be.reverted;
+
+    await expect(
+      executeSafeTransaction(fixture.venusGuardian, parseEther("0.2"), user, "0x", fixture.owner, fixture.executor),
+    ).to.be.not.reverted;
+
+    await expect(
+      executeSafeTransaction(fixture.venusGuardian, parseEther("0.3"), user, "0x", fixture.owner, fixture.executor),
+    ).to.be.not.reverted;
   });
 });
